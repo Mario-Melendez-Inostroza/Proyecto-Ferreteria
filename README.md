@@ -86,16 +86,40 @@ El sistema utiliza una arquitectura de microservicios, permitiendo que cada comp
 
 # Arquitectura Implementada
 
-## BFF (Backend For Frontend)
+## API Gateway
 
-Puerto: **8080**
+Puerto: **8080** — único punto de entrada público al sistema.
 
 Responsabilidades:
 
-- Punto único de entrada.
-- Validación de JWT.
-- Orquestación de microservicios.
-- Exposición de endpoints al cliente.
+- Único punto de acceso externo (todo el resto de los servicios es interno a la red Docker).
+- Reenvía (forward) toda solicitud hacia el BFF (`lb://bff`) resuelto vía Eureka.
+- No implementa lógica de negocio ni seguridad propia: es un forwarder puro. La validación de JWT y la orquestación siguen siendo responsabilidad exclusiva del BFF.
+
+---
+
+## Eureka Server
+
+Puerto: **8761** (dashboard de registro/descubrimiento)
+
+Responsabilidades:
+
+- Registro y descubrimiento de servicios (Service Discovery).
+- Todos los demás componentes (Gateway, BFF y los 9 microservicios) se registran en Eureka al arrancar.
+- La comunicación entre BFF↔microservicios y microservicio↔microservicio se resuelve por nombre lógico (`http://ms-xxx`) vía Eureka + Spring Cloud LoadBalancer, en lugar de URLs fijas.
+
+---
+
+## BFF (Backend For Frontend)
+
+Puerto: **8090** (interno; ya no es el punto de entrada público — ese rol lo cumple el API Gateway en el 8080)
+
+Responsabilidades:
+
+- Validación de JWT (contra ms-auth) antes de reenviar cualquier solicitud.
+- Orquestación de los 9 microservicios de negocio.
+- Exposición de endpoints al cliente a través del Gateway.
+- Resuelve cada microservicio vía Eureka + `@LoadBalanced RestClient.Builder` (nombres lógicos, no URLs fijas).
 
 ---
 
@@ -164,13 +188,57 @@ Responsabilidades:
 
 ---
 
+## ms-supplier
+
+Puerto: **8086**
+
+Responsabilidades:
+
+- CRUD de proveedores (nombre, RUT, contacto, estado).
+
+---
+
+## ms-purchase
+
+Puerto: **8087**
+
+Responsabilidades:
+
+- Registro y gestión de órdenes de compra a proveedores.
+- Al confirmar una orden, incrementa el stock correspondiente en ms-inventory (simétrico a cómo ms-sales lo descuenta).
+- Valida proveedor (ms-supplier) y productos (ms-product) antes de crear la orden.
+
+---
+
+## ms-report
+
+Puerto: **8088** — **sin base de datos** (servicio de agregación pura, solo lectura)
+
+Responsabilidades:
+
+- Resumen de ventas, top de productos, valorización de inventario y alertas de stock bajo.
+- Agrega información en tiempo real desde ms-sales, ms-inventory y ms-product vía Eureka; no persiste ningún dato propio.
+
+---
+
+## ms-pricing
+
+Puerto: **8091** — **sin base de datos** (servicio de cálculo puro)
+
+Responsabilidades:
+
+- Cálculo de descuentos por volumen/categoría sobre un precio y cantidad recibidos como entrada.
+- Reglas de descuento configurables vía `application.properties`, sin persistencia.
+
+---
+
 # Persistencia de Datos
 
 El proyecto implementa el patrón:
 
 ## Database per Service
 
-Cada microservicio posee su propia base de datos lógica.
+Cada microservicio que requiere persistencia posee su propia base de datos lógica. Los servicios puramente de agregación/cálculo (`ms-report`, `ms-pricing`) no tienen base de datos, evitando duplicar información que ya vive en otro microservicio.
 
 | Microservicio | Base de Datos |
 |-------------|-------------|
@@ -179,6 +247,10 @@ Cada microservicio posee su propia base de datos lógica.
 | ms-inventory | inventory_db |
 | ms-sales | sales_db |
 | ms-notification | notification_db |
+| ms-supplier | supplier_db |
+| ms-purchase | purchase_db |
+| ms-report | *(sin base de datos)* |
+| ms-pricing | *(sin base de datos)* |
 
 Todas las bases de datos se ejecutan sobre una única instancia PostgreSQL para simplificar el despliegue académico mediante Docker.
 
@@ -186,15 +258,22 @@ Todas las bases de datos se ejecutan sobre una única instancia PostgreSQL para 
 
 # Puertos del Sistema
 
-| Servicio | Puerto |
-|-----------|---------|
-| BFF | 8080 |
-| ms-auth | 8081 |
-| ms-product | 8082 |
-| ms-inventory | 8083 |
-| ms-sales | 8084 |
-| ms-notification | 8085 |
-| PostgreSQL | 5432 |
+| Servicio | Puerto | Expuesto al host |
+|-----------|---------|---------|
+| API Gateway | 8080 | Sí (único punto de entrada público) |
+| Eureka Server | 8761 | Sí (dashboard) |
+| BFF | 8090 | No (interno) |
+| ms-auth | 8081 | No (interno) |
+| ms-product | 8082 | No (interno) |
+| ms-inventory | 8083 | No (interno) |
+| ms-sales | 8084 | No (interno) |
+| ms-notification | 8085 | No (interno) |
+| ms-supplier | 8086 | No (interno) |
+| ms-purchase | 8087 | No (interno) |
+| ms-report | 8088 | No (interno) |
+| ms-pricing | 8091 | No (interno) |
+| PostgreSQL | 5432 | Sí (desarrollo) |
+| GlitchTip | 8000 | Sí (UI de observabilidad) |
 
 ---
 
@@ -203,31 +282,66 @@ Todas las bases de datos se ejecutan sobre una única instancia PostgreSQL para 
 ```mermaid
 graph LR
     Client[Cliente]
-    BFF[bff-service 8080]
+    Gateway[apigateway 8080]
+    Eureka[eureka 8761]
+    BFF[bff-service 8090]
     Auth[ms-auth 8081]
     Product[ms-product 8082]
     Inventory[ms-inventory 8083]
     Sales[ms-sales 8084]
     Notification[ms-notification 8085]
+    Supplier[ms-supplier 8086]
+    Purchase[ms-purchase 8087]
+    Report[ms-report 8088]
+    Pricing[ms-pricing 8091]
     Postgres[PostgreSQL 5432]
+    GlitchTip[GlitchTip 8000]
 
-    Client -->|HTTP REST Bearer token| BFF
+    Client -->|HTTP REST Bearer token| Gateway
+    Gateway -->|lb://bff vía Eureka| BFF
     BFF -->|HTTP REST validate token| Auth
-    BFF -->|HTTP REST| Product
-    BFF -->|HTTP REST| Inventory
-    BFF -->|HTTP REST| Sales
-    BFF -->|HTTP REST| Notification
+    BFF -->|vía Eureka/LoadBalancer| Product
+    BFF -->|vía Eureka/LoadBalancer| Inventory
+    BFF -->|vía Eureka/LoadBalancer| Sales
+    BFF -->|vía Eureka/LoadBalancer| Notification
+    BFF -->|vía Eureka/LoadBalancer| Supplier
+    BFF -->|vía Eureka/LoadBalancer| Purchase
+    BFF -->|vía Eureka/LoadBalancer| Report
+    BFF -->|vía Eureka/LoadBalancer| Pricing
 
-    Sales -->|HTTP REST validate product| Product
-    Sales -->|HTTP REST descontar stock| Inventory
-    Sales -->|HTTP REST generar alerta| Notification
-    Inventory -->|HTTP REST validar producto| Product
+    Sales -->|validar producto| Product
+    Sales -->|descontar stock| Inventory
+    Sales -->|generar alerta| Notification
+    Inventory -->|validar producto| Product
+    Purchase -->|validar proveedor| Supplier
+    Purchase -->|validar producto| Product
+    Purchase -->|incrementar stock| Inventory
+    Report -->|agregar datos| Sales
+    Report -->|agregar datos| Inventory
+    Report -->|agregar datos| Product
+
+    Gateway -.->|registro| Eureka
+    BFF -.->|registro| Eureka
+    Auth -.->|registro| Eureka
+    Product -.->|registro| Eureka
+    Inventory -.->|registro| Eureka
+    Sales -.->|registro| Eureka
+    Notification -.->|registro| Eureka
+    Supplier -.->|registro| Eureka
+    Purchase -.->|registro| Eureka
+    Report -.->|registro| Eureka
+    Pricing -.->|registro| Eureka
 
     Auth --> Postgres
     Product --> Postgres
     Inventory --> Postgres
     Sales --> Postgres
     Notification --> Postgres
+    Supplier --> Postgres
+    Purchase --> Postgres
+
+    Gateway -.->|logs/errores| GlitchTip
+    BFF -.->|logs/errores| GlitchTip
 ```
 
 ---
@@ -237,6 +351,7 @@ graph LR
 ```mermaid
 graph LR
     User[Cliente]
+    Gateway[apigateway 8080]
     JwtFilter[JwtAuthenticationFilter]
     SecurityConfig[SecurityConfig]
     RestClientConfig[RestClientConfig]
@@ -248,67 +363,58 @@ graph LR
     InventoryController[InventoryController]
     SalesController[SalesController]
     NotificationController[NotificationController]
-
-    AuthService[AuthBffService]
-    ProductService[ProductBffService]
-    InventoryService[InventoryBffService]
-    SalesService[SalesBffService]
-    NotificationService[NotificationBffService]
+    SupplierController[SupplierController]
+    PurchaseController[PurchaseController]
+    ReportController[ReportController]
+    PricingController[PricingController]
 
     AuthClient[AuthClient]
-    ProductClient[ProductClient]
-    InventoryClient[InventoryClient]
-    SalesClient[SalesClient]
-    NotificationClient[NotificationClient]
+    OtherClients[...otros 8 Clients]
 
-    MSAuth[ms-auth 8081]
-    MSProduct[ms-product 8082]
-    MSInventory[ms-inventory 8083]
-    MSSales[ms-sales 8084]
-    MSNotification[ms-notification 8085]
+    MSAuth[ms-auth]
+    OtherMS[...otros 8 microservicios]
 
-    User -->|HTTP REST Bearer token| JwtFilter
+    User -->|HTTP REST Bearer token| Gateway
+    Gateway -->|lb://bff vía Eureka| JwtFilter
     JwtFilter --> SecurityConfig
     JwtFilter -->|validate token| AuthClient
-    AuthClient -->|POST /auth/validate| MSAuth
+    AuthClient -->|POST /auth/validate vía Eureka| MSAuth
 
     JwtFilter --> AuthController
     JwtFilter --> ProductController
     JwtFilter --> InventoryController
     JwtFilter --> SalesController
     JwtFilter --> NotificationController
+    JwtFilter --> SupplierController
+    JwtFilter --> PurchaseController
+    JwtFilter --> ReportController
+    JwtFilter --> PricingController
 
-    AuthController --> AuthService
-    ProductController --> ProductService
-    InventoryController --> InventoryService
-    SalesController --> SalesService
-    NotificationController --> NotificationService
-
-    AuthService --> AuthClient
-    ProductService --> ProductClient
-    InventoryService --> InventoryClient
-    SalesService --> SalesClient
-    NotificationService --> NotificationClient
-
-    AuthClient --> MSAuth
-    ProductClient --> MSProduct
-    InventoryClient --> MSInventory
-    SalesClient --> MSSales
-    NotificationClient --> MSNotification
+    ProductController --> OtherClients
+    InventoryController --> OtherClients
+    SalesController --> OtherClients
+    NotificationController --> OtherClients
+    SupplierController --> OtherClients
+    PurchaseController --> OtherClients
+    ReportController --> OtherClients
+    PricingController --> OtherClients
+    OtherClients --> OtherMS
 
     AuthController -.-> GlobalExceptionHandler
     ProductController -.-> GlobalExceptionHandler
     InventoryController -.-> GlobalExceptionHandler
     SalesController -.-> GlobalExceptionHandler
     NotificationController -.-> GlobalExceptionHandler
+    SupplierController -.-> GlobalExceptionHandler
+    PurchaseController -.-> GlobalExceptionHandler
+    ReportController -.-> GlobalExceptionHandler
+    PricingController -.-> GlobalExceptionHandler
 
-    RestClientConfig -.-> AuthClient
-    RestClientConfig -.-> ProductClient
-    RestClientConfig -.-> InventoryClient
-    RestClientConfig -.-> SalesClient
-    RestClientConfig -.-> NotificationClient
+    RestClientConfig -.->|@LoadBalanced| AuthClient
+    RestClientConfig -.->|@LoadBalanced| OtherClients
 ```
-```
+
+> Nota: cada uno de los 9 microservicios sigue el mismo patrón Controller → BffService → Client que `AuthController`/`AuthClient`; se omiten del diagrama por brevedad (ver tabla de controladores más abajo).
 
 ---
 
@@ -323,41 +429,60 @@ graph LR
 - Se comunica únicamente con el BFF mediante HTTP REST
 - Envía token JWT en el header `Authorization: Bearer <token>`
 
-**2. Capa Gateway (BFF - Puerto 8080)**
-El BFF es el **único punto de entrada** al sistema:
+**2. Capa API Gateway (Puerto 8080)**
+El API Gateway es el **único punto de entrada público** al sistema:
+- Reenvía toda solicitud entrante hacia `lb://bff`, resuelto vía Eureka
+- No implementa lógica de negocio ni seguridad propia (forwarder puro)
+- Expone Actuator (`/actuator/health`) para healthchecks de Docker
+
+**3. Capa BFF (Puerto 8090, interno)**
+El BFF conserva toda la lógica de orquestación y seguridad:
 - Realiza validación de JWT antes de procesar cualquier solicitud
-- Orquesta llamadas a los microservicios
+- Orquesta llamadas a los 9 microservicios de negocio, resolviéndolos vía Eureka + `@LoadBalanced RestClient.Builder`
 - Centraliza el manejo de errores (GlobalExceptionHandler)
 - Transforma respuestas y normaliza formatos
 - Expone documentación Swagger
 
-**3. Capa de Microservicios**
-Cinco microservicios independientes con responsabilidades específicas:
+**4. Capa de Microservicios**
+Nueve microservicios independientes con responsabilidades específicas, todos registrados en Eureka:
 - **ms-auth (8081):** Gestión de autenticación y generación de JWT
 - **ms-product (8082):** Catálogo de productos
 - **ms-inventory (8083):** Control de inventario
 - **ms-sales (8084):** Registro y consulta de ventas
 - **ms-notification (8085):** Sistema de alertas
+- **ms-supplier (8086):** Gestión de proveedores
+- **ms-purchase (8087):** Órdenes de compra a proveedores
+- **ms-report (8088):** Reportería agregada, sin base de datos
+- **ms-pricing (8091):** Cálculo de descuentos, sin base de datos
 
-**4. Capa de Persistencia**
+**5. Capa de Persistencia**
 Una única instancia PostgreSQL (5432) con patrón **Database per Service**:
-- Cada microservicio tiene su propia base de datos lógica
+- Cada microservicio que requiere persistencia tiene su propia base de datos lógica
+- ms-report y ms-pricing no persisten datos propios (agregación/cálculo puro)
 - Garantiza independencia y bajo acoplamiento
 - Simplifica el despliegue académico mediante Docker
 
+**6. Observabilidad**
+- **Eureka (8761):** registro y descubrimiento de servicios
+- **GlitchTip (8000):** captura centralizada de errores/logs (self-hosted), integrado en Gateway, BFF y los 9 microservicios
+
 ### Flujos de Comunicación
 
-**Flujo Cliente → BFF → Microservicio:**
+**Flujo Cliente → Gateway → BFF → Microservicio:**
 ```
-Usuario → BFF:8080 (Bearer Token) → Microservicio:PORT → PostgreSQL
+Usuario → apigateway:8080 (Bearer Token) → lb://bff (Eureka) → bff:8090 → ms-xxx (Eureka) → PostgreSQL
 ```
 
-**Coordinación entre Microservicios (Orquestación):**
+**Coordinación entre Microservicios (Orquestación, todo vía Eureka):**
 ```
-ms-sales:8084 → ms-product:8082 (validar producto)
-ms-sales:8084 → ms-inventory:8083 (descontar stock)
-ms-sales:8084 → ms-notification:8085 (generar alerta)
-ms-inventory:8083 → ms-product:8082 (validar producto)
+ms-sales → ms-product (validar producto)
+ms-sales → ms-inventory (descontar stock)
+ms-sales → ms-notification (generar alerta)
+ms-inventory → ms-product (validar producto)
+ms-purchase → ms-supplier (validar proveedor)
+ms-purchase → ms-product (validar producto)
+ms-purchase → ms-inventory (incrementar stock al confirmar)
+ms-report → ms-sales / ms-inventory / ms-product (agregación de solo lectura)
 ```
 
 ---
@@ -390,7 +515,7 @@ La seguridad se implementa en dos niveles:
 - `/swagger-ui/**` - Swagger UI
 
 **2. Capa de Controladores (🎮)**
-Seis controladores REST exponen los servicios del BFF:
+Diez controladores REST exponen los servicios del BFF:
 
 | Controlador | Ruta | Responsabilidad |
 |---|---|---|
@@ -400,20 +525,28 @@ Seis controladores REST exponen los servicios del BFF:
 | InventoryController | `/api/inventory` | Gestión de inventario |
 | SalesController | `/api/sales` | Registro y consulta de ventas |
 | NotificationController | `/api/notifications` | Consulta de alertas |
+| SupplierController | `/api/suppliers` | Gestión de proveedores |
+| PurchaseController | `/api/purchases` | Órdenes de compra |
+| ReportController | `/api/reports` | Reportería agregada |
+| PricingController | `/api/pricing` | Cálculo de descuentos |
 
 **3. Capa de Servicios (⚙️)**
-Cinco servicios orquestadores que **delegan** a los clientes HTTP:
+Nueve servicios orquestadores que **delegan** a los clientes HTTP:
 
 - **AuthBffService:** Delega a AuthClient
 - **ProductBffService:** Delega a ProductClient
 - **InventoryBffService:** Delega a InventoryClient
 - **SalesBffService:** Delega a SalesClient
 - **NotificationBffService:** Delega a NotificationClient
+- **SupplierBffService:** Delega a SupplierClient
+- **PurchaseBffService:** Delega a PurchaseClient
+- **ReportBffService:** Delega a ReportClient
+- **PricingBffService:** Delega a PricingClient
 
 > **Nota:** El BFF NO contiene lógica de negocio compleja. Es un patrón de **orquestación simple** donde el servicio delega directamente al cliente. La lógica compleja (validar producto, descontar stock, generar alertas) reside en los microservicios.
 
 **4. Capa de Clientes HTTP (🌐)**
-Cinco clientes HTTP comunican con los microservicios usando RestClient:
+Nueve clientes HTTP comunican con los microservicios usando RestClient:
 
 ```java
 @Component
@@ -432,41 +565,41 @@ public class AuthClient {
 }
 ```
 
-Cada cliente está calificado con un bean específico:
-- `@Qualifier("authRestClient")` → ms-auth:8081
-- `@Qualifier("productRestClient")` → ms-product:8082
-- `@Qualifier("inventoryRestClient")` → ms-inventory:8083
-- `@Qualifier("salesRestClient")` → ms-sales:8084
-- `@Qualifier("notificationRestClient")` → ms-notification:8085
+Cada cliente está calificado con un bean específico, resuelto vía Eureka (no por puerto fijo):
+- `@Qualifier("authRestClient")` → ms-auth
+- `@Qualifier("productRestClient")` → ms-product
+- `@Qualifier("inventoryRestClient")` → ms-inventory
+- `@Qualifier("salesRestClient")` → ms-sales
+- `@Qualifier("notificationRestClient")` → ms-notification
+- `@Qualifier("supplierRestClient")` → ms-supplier
+- `@Qualifier("purchaseRestClient")` → ms-purchase
+- `@Qualifier("reportRestClient")` → ms-report
+- `@Qualifier("pricingRestClient")` → ms-pricing
 
 **5. Configuración (⚙️)**
-RestClientConfig crea cinco RestClient beans, uno por microservicio:
+RestClientConfig crea un `RestClient` por microservicio, resuelto vía Eureka + Spring Cloud LoadBalancer (nombres lógicos, no URLs fijas):
 
 ```java
 @Configuration
 public class RestClientConfig {
-    @Value("${auth.service.url}")        private String authUrl;
-    @Value("${product.service.url}")     private String productUrl;
-    @Value("${inventory.service.url}")   private String inventoryUrl;
-    @Value("${sales.service.url}")       private String salesUrl;
-    @Value("${notification.service.url}") private String notificationUrl;
+
+    @Bean
+    @LoadBalanced
+    public RestClient.Builder loadBalancedRestClientBuilder() {
+        return RestClient.builder();
+    }
 
     @Bean("authRestClient")
-    public RestClient authRestClient() {
-        return RestClient.builder().baseUrl(authUrl).build();
+    public RestClient authRestClient(RestClient.Builder loadBalancedRestClientBuilder) {
+        return loadBalancedRestClientBuilder.clone().baseUrl("http://ms-auth").build();
     }
-    // ... otros beans similares
+    // ... un bean análogo por cada uno de los 9 microservicios
+    // (ms-product, ms-inventory, ms-sales, ms-notification,
+    //  ms-supplier, ms-purchase, ms-report, ms-pricing)
 }
 ```
 
-URLs configuradas en `application.properties`:
-```properties
-auth.service.url=${AUTH_SERVICE_URL:http://localhost:8081}
-product.service.url=${PRODUCT_SERVICE_URL:http://localhost:8082}
-inventory.service.url=${INVENTORY_SERVICE_URL:http://localhost:8083}
-sales.service.url=${SALES_SERVICE_URL:http://localhost:8084}
-notification.service.url=${NOTIFICATION_SERVICE_URL:http://localhost:8085}
-```
+El nombre lógico (`http://ms-auth`, `http://ms-product`, etc.) corresponde al `spring.application.name` con el que cada microservicio se registra en Eureka; Spring Cloud LoadBalancer resuelve la instancia real detrás de escena.
 
 **6. Manejo de Errores (❌)**
 GlobalExceptionHandler captura excepciones a nivel global:
@@ -491,47 +624,52 @@ public class GlobalExceptionHandler {
 
 ```
 1. Cliente envía: POST /api/sales con Authorization: Bearer <token>
-   └─→ BFF:8080 recibe la solicitud
+   └─→ apigateway:8080 recibe la solicitud y la reenvía a lb://bff (Eureka)
 
-2. SecurityFilterChain intercepta
+2. bff:8090 recibe la solicitud reenviada por el Gateway
+
+3. SecurityFilterChain intercepta
    └─→ Ordena los filtros de seguridad
 
-3. JwtAuthenticationFilter ejecuta PRIMERO
+4. JwtAuthenticationFilter ejecuta PRIMERO
    ├─→ Extrae token del header
    ├─→ Llama a AuthClient.validateToken(token)
-   ├─→ AuthClient → POST ms-auth:8081/auth/validate
+   ├─→ AuthClient → POST ms-auth/auth/validate (resuelto vía Eureka)
    ├─→ Si válido: configura SecurityContext
    └─→ Si inválido: rechaza (401)
 
-4. SalesController recibe la solicitud
+5. SalesController recibe la solicitud
    └─→ Llama a SalesBffService.register(dto)
 
-5. SalesBffService.register()
+6. SalesBffService.register()
    └─→ Llama a SalesClient.register(dto)
 
-6. SalesClient realiza HTTP REST
-   └─→ POST ms-sales:8084/sales con los datos
+7. SalesClient realiza HTTP REST
+   └─→ POST ms-sales/sales con los datos (resuelto vía Eureka)
 
-7. ms-sales procesa:
-   ├─→ Valida producto → Llama a ms-product:8082
-   ├─→ Descuenta stock → Llama a ms-inventory:8083
-   └─→ Genera alerta → Llama a ms-notification:8085
+8. ms-sales procesa:
+   ├─→ Valida producto → Llama a ms-product (Eureka)
+   ├─→ Descuenta stock → Llama a ms-inventory (Eureka)
+   └─→ Genera alerta → Llama a ms-notification (Eureka)
 
-8. Respuesta retorna:
-   ms-sales:8084 → SalesClient → SalesBffService → SalesController → Cliente
+9. Respuesta retorna:
+   ms-sales → SalesClient → SalesBffService → SalesController → apigateway → Cliente
 
-9. Si ocurre excepción:
-   └─→ GlobalExceptionHandler la captura y transforma a JSON
+10. Si ocurre excepción:
+    └─→ GlobalExceptionHandler la captura y transforma a JSON
 ```
 
 ---
 
-### Patrón Arquitectónico: API Gateway + Service Layer
+### Patrón Arquitectónico: API Gateway + BFF + Service Layer
 
-**API Gateway (BFF):**
-- Punto único de entrada (SPOF)
+**API Gateway (apigateway, 8080):**
+- Único punto de entrada público
+- Forwarder puro hacia `lb://bff` (sin lógica propia)
+
+**BFF (bff-service, 8090, interno):**
 - Validación centralizada de JWT
-- Enrutamiento a microservicios
+- Orquestación y enrutamiento a los 9 microservicios vía Eureka
 - Manejo de errores global
 - Transformación de respuestas
 
@@ -624,14 +762,20 @@ Cada microservicio dispone de documentación Swagger.
 
 ## URLs
 
-| Servicio | Swagger |
+Swagger se expone en cada servicio de forma interna (puerto no publicado al host excepto el propio Gateway); para pruebas locales fuera de Docker cada servicio puede levantarse individualmente en su puerto:
+
+| Servicio | Swagger (local, fuera de Docker) |
 |-----------|-----------|
-| BFF | http://localhost:8080/swagger-ui.html |
+| BFF | http://localhost:8090/swagger-ui.html |
 | ms-auth | http://localhost:8081/swagger-ui.html |
 | ms-product | http://localhost:8082/swagger-ui.html |
 | ms-inventory | http://localhost:8083/swagger-ui.html |
 | ms-sales | http://localhost:8084/swagger-ui.html |
 | ms-notification | http://localhost:8085/swagger-ui.html |
+| ms-supplier | http://localhost:8086/swagger-ui.html |
+| ms-purchase | http://localhost:8087/swagger-ui.html |
+| ms-report | http://localhost:8088/swagger-ui.html |
+| ms-pricing | http://localhost:8091/swagger-ui.html |
 
 ---
 
@@ -653,7 +797,8 @@ Bearer eyJ...
 # Tecnologías Utilizadas
 
 - Java 21
-- Spring Boot 3
+- Spring Boot 3.3.4
+- Spring Cloud 2023.0.x (Eureka, Gateway, LoadBalancer)
 - Spring Security
 - Spring Validation
 - PostgreSQL 16
@@ -664,34 +809,43 @@ Bearer eyJ...
 - Gradle
 - JWT
 - Flyway
+- GlitchTip (self-hosted, compatible con Sentry SDK) + SLF4J/Logback
 
 ---
 
 # Docker
 
+El ecosistema completo (Eureka, API Gateway, BFF, los 9 microservicios, PostgreSQL y GlitchTip) se levanta con un único `docker-compose.yml` en la raíz del proyecto.
+
 ## Construcción
 
 ```bash
-docker compose -f docker-compose2.yml build
+docker compose build
 ```
 
 ## Levantar Contenedores
 
 ```bash
-docker compose -f docker-compose2.yml up -d
+docker compose up -d
 ```
+
+Todo el ecosistema queda operativo ejecutando únicamente este comando (sin pasos manuales adicionales), gracias a los healthchecks y `depends_on` configurados entre servicios.
 
 ## Verificar Estado
 
 ```bash
-docker ps
+docker compose ps
 ```
 
 ## Detener Servicios
 
 ```bash
-docker compose -f docker-compose2.yml down
+docker compose down
 ```
+
+## Observabilidad (GlitchTip)
+
+GlitchTip se levanta junto con el resto del stack (self-hosted, con su propia base de datos PostgreSQL y Redis) y queda disponible en http://localhost:8000. Por defecto la variable `GLITCHTIP_DSN` viaja vacía (no hay DSN hardcodeado): para capturar errores es necesario crear un proyecto en la UI de GlitchTip, copiar el DSN generado y exportarlo como variable de entorno `GLITCHTIP_DSN` antes de levantar el stack. Mientras tanto, los logs de todos los servicios (Gateway, BFF y los 9 microservicios) se siguen mostrando normalmente por consola vía SLF4J.
 
 ---
 
@@ -735,9 +889,9 @@ Permite visualizar alertas generadas por el sistema.
 
 # Ejecución de Pruebas
 
-Cada microservicio (bff, ms-auth, ms-product, ms-inventory, ms-sales, ms-notification) incluye su propia suite de pruebas y su propio wrapper de Gradle.
+Cada uno de los 12 proyectos Gradle (`eureka`, `apigateway`, `bff`, `ms-auth`, `ms-product`, `ms-inventory`, `ms-sales`, `ms-notification`, `ms-supplier`, `ms-purchase`, `ms-report`, `ms-pricing`) incluye su propia suite de pruebas y su propio wrapper de Gradle.
 
-Para ejecutar las pruebas de un microservicio, ubicarse en su carpeta y ejecutar:
+Para ejecutar las pruebas de un proyecto, ubicarse en su carpeta y ejecutar:
 
 ```bash
 ./gradlew.bat clean test
@@ -750,7 +904,7 @@ cd ms-auth
 ./gradlew.bat clean test
 ```
 
-Este comando se debe repetir dentro de cada carpeta de microservicio (`bff`, `ms-auth`, `ms-product`, `ms-inventory`, `ms-sales`, `ms-notification`) para validar el proyecto completo.
+Este comando se debe repetir dentro de cada carpeta (`eureka`, `apigateway`, `bff`, `ms-auth`, `ms-product`, `ms-inventory`, `ms-sales`, `ms-notification`, `ms-supplier`, `ms-purchase`, `ms-report`, `ms-pricing`) para validar el proyecto completo.
 
 ---
 
@@ -768,9 +922,9 @@ El proyecto implementa distintos niveles de pruebas siguiendo la arquitectura po
 
 # Cobertura de Código
 
-El proyecto utiliza **JaCoCo** para medir la cobertura de código de las pruebas en cada microservicio.
+El proyecto utiliza **JaCoCo** para medir la cobertura de código de las pruebas en cada uno de los 12 proyectos, con un umbral mínimo del **40%** verificado automáticamente mediante la tarea `jacocoTestCoverageVerification` (falla el build si no se cumple). La clase `*Application` de cada proyecto se excluye del cálculo de cobertura, ya que su único método (`main`) no es representativo de lógica de negocio.
 
-Al ejecutar `./gradlew.bat clean test`, JaCoCo genera automáticamente el reporte de cobertura.
+Al ejecutar `./gradlew.bat clean test`, JaCoCo genera automáticamente el reporte de cobertura y valida el umbral mínimo.
 
 Los reportes HTML se generan en la siguiente ruta dentro de cada microservicio:
 
