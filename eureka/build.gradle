@@ -32,7 +32,7 @@ dependencyManagement {
 
 tasks.named('test') {
     useJUnitPlatform()
-    finalizedBy tasks.named('jacocoTestReport')
+    finalizedBy tasks.named('jacocoTestReport'), tasks.named('jacocoTestCoverageVerification')
 }
 
 jacocoTestReport {
@@ -40,5 +40,26 @@ jacocoTestReport {
     reports {
         xml.required = true
         html.required = true
+    }
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: ['**/*Application.class'])
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    dependsOn tasks.named('jacocoTestReport')
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: ['**/*Application.class'])
+        }))
+    }
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.40
+            }
+        }
     }
 }
