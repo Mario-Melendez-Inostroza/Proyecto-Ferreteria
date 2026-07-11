@@ -11,3 +11,5 @@ CREATE DATABASE product_db;
 CREATE DATABASE inventory_db;
 CREATE DATABASE sales_db;
 CREATE DATABASE notification_db;
+CREATE DATABASE supplier_db;
+CREATE DATABASE purchase_db;

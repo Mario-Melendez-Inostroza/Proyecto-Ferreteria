@@ -38,4 +38,24 @@ public class RestClientConfig {
     public RestClient notificationRestClient(RestClient.Builder loadBalancedRestClientBuilder) {
         return loadBalancedRestClientBuilder.clone().baseUrl("http://ms-notification").build();
     }
+
+    @Bean("supplierRestClient")
+    public RestClient supplierRestClient(RestClient.Builder loadBalancedRestClientBuilder) {
+        return loadBalancedRestClientBuilder.clone().baseUrl("http://ms-supplier").build();
+    }
+
+    @Bean("purchaseRestClient")
+    public RestClient purchaseRestClient(RestClient.Builder loadBalancedRestClientBuilder) {
+        return loadBalancedRestClientBuilder.clone().baseUrl("http://ms-purchase").build();
+    }
+
+    @Bean("reportRestClient")
+    public RestClient reportRestClient(RestClient.Builder loadBalancedRestClientBuilder) {
+        return loadBalancedRestClientBuilder.clone().baseUrl("http://ms-report").build();
+    }
+
+    @Bean("pricingRestClient")
+    public RestClient pricingRestClient(RestClient.Builder loadBalancedRestClientBuilder) {
+        return loadBalancedRestClientBuilder.clone().baseUrl("http://ms-pricing").build();
+    }
 }
