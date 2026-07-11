@@ -6,27 +6,27 @@
 #
 #   [Frontend / Postman]
 #          ↓ Puerto 8080
-#     bff-service          ← único punto de entrada público
-#      ↓    ↓    ↓    ↓    ↓
-#   ms-auth  ms-product  ms-inventory  ms-sales  ms-notification
+#     apigateway            ← único punto de entrada público
+#          ↓ lb://bff (Eureka)
+#     bff-service           ← orquestación + seguridad JWT
+#      ↓  ↓  ↓  ↓  ↓                         (todo vía Eureka)
+#   ms-auth ms-product ms-inventory ms-sales ms-notification
 #      ↓         ↓            ↓           ↓            ↓
 #                    PostgreSQL (5432)
 #
-# PUERTOS:
-#   8080 → bff-service      (público)
-#   8081 → ms-auth          (interno)
-#   8082 → ms-product       (interno)
-#   8083 → ms-inventory     (interno)
-#   8084 → ms-sales         (interno)
-#   8085 → ms-notification  (interno)
-#   5432 → PostgreSQL       (desarrollo)
+#   eureka (8761) — registro/descubrimiento de todos los servicios
+#
+# PUERTOS EXPUESTOS AL HOST (todo lo demás queda solo en red interna):
+#   8080 → apigateway   (público, único punto de entrada externo)
+#   8761 → eureka       (dashboard de registro)
+#   5432 → postgres     (desarrollo)
 #
 # =============================================================
 
 services:
 
   # -----------------------------------------------------------
-  # POSTGRESQL
+  # POSTGRESQL — bases de datos de los microservicios de negocio
   # -----------------------------------------------------------
   postgres:
     image: postgres:16
@@ -47,15 +47,67 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    networks:
+      - ferreteria-net
 
   # -----------------------------------------------------------
-  # MS-AUTH — Autenticación y JWT (Puerto 8081)
+  # EUREKA — registro y descubrimiento de servicios (Puerto 8761)
+  # -----------------------------------------------------------
+  eureka:
+    build: ./eureka
+    container_name: eureka
+    restart: always
+    ports:
+      - "8761:8761"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8761'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - ferreteria-net
+
+  # -----------------------------------------------------------
+  # API GATEWAY — único punto de entrada público (Puerto 8080)
+  # -----------------------------------------------------------
+  # Reenvía todo el tráfico entrante hacia lb://bff (resuelto vía
+  # Eureka). No implementa lógica de autenticación propia; toda
+  # la seguridad/orquestación la sigue haciendo el BFF.
+  # -----------------------------------------------------------
+  apigateway:
+    build: ./apigateway
+    container_name: apigateway
+    restart: always
+    depends_on:
+      eureka:
+        condition: service_healthy
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
+      EUREKA_INSTANCE_HOSTNAME: apigateway
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    ports:
+      - "8080:8080"
+    networks:
+      - ferreteria-net
+
+  # -----------------------------------------------------------
+  # MS-AUTH — Autenticación y JWT (Puerto 8081, interno)
   # -----------------------------------------------------------
   ms-auth:
     build: ./ms-auth
     container_name: ms-auth
+    restart: always
     depends_on:
       postgres:
+        condition: service_healthy
+      eureka:
         condition: service_healthy
     environment:
       DB_HOST: postgres
@@ -65,17 +117,29 @@ services:
       DB_PASSWORD: postgres1234
       JWT_SECRET: "ferreteria-secret-key-super-segura-2024-minimo-32-chars"
       JWT_EXPIRATION: 3600000
-    ports:
-      - "8081:8081"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
+      EUREKA_INSTANCE_HOSTNAME: ms-auth
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8081'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - ferreteria-net
 
   # -----------------------------------------------------------
-  # MS-PRODUCT — Catálogo de Productos (Puerto 8082)
+  # MS-PRODUCT — Catálogo de Productos (Puerto 8082, interno)
   # -----------------------------------------------------------
   ms-product:
     build: ./ms-product
     container_name: ms-product
+    restart: always
     depends_on:
       postgres:
+        condition: service_healthy
+      eureka:
         condition: service_healthy
     environment:
       DB_HOST: postgres
@@ -83,17 +147,29 @@ services:
       DB_NAME: product_db
       DB_USER: postgres
       DB_PASSWORD: postgres1234
-    ports:
-      - "8082:8082"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
+      EUREKA_INSTANCE_HOSTNAME: ms-product
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8082'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - ferreteria-net
 
   # -----------------------------------------------------------
-  # MS-INVENTORY — Stock por Producto y Bodega (Puerto 8083)
+  # MS-INVENTORY — Stock por Producto y Bodega (Puerto 8083, interno)
   # -----------------------------------------------------------
   ms-inventory:
     build: ./ms-inventory
     container_name: ms-inventory
+    restart: always
     depends_on:
       postgres:
+        condition: service_healthy
+      eureka:
         condition: service_healthy
     environment:
       DB_HOST: postgres
@@ -101,24 +177,34 @@ services:
       DB_NAME: inventory_db
       DB_USER: postgres
       DB_PASSWORD: postgres1234
-      # URL del ms-product para validar que el producto existe
-      PRODUCT_SERVICE_URL: http://ms-product:8082
-    ports:
-      - "8083:8083"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
+      EUREKA_INSTANCE_HOSTNAME: ms-inventory
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8083'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - ferreteria-net
 
   # -----------------------------------------------------------
-  # MS-SALES — Ventas (Puerto 8084)
+  # MS-SALES — Ventas (Puerto 8084, interno)
   # -----------------------------------------------------------
   # Al registrar una venta:
-  #   1. Verifica que el producto existe en ms-product
-  #   2. Descuenta el stock en ms-inventory
-  #   3. Notifica a ms-notification si el stock queda bajo
+  #   1. Verifica que el producto existe en ms-product (vía Eureka)
+  #   2. Descuenta el stock en ms-inventory (vía Eureka)
+  #   3. Notifica a ms-notification si el stock queda bajo (vía Eureka)
   # -----------------------------------------------------------
   ms-sales:
     build: ./ms-sales
     container_name: ms-sales
+    restart: always
     depends_on:
       postgres:
+        condition: service_healthy
+      eureka:
         condition: service_healthy
     environment:
       DB_HOST: postgres
@@ -126,23 +212,29 @@ services:
       DB_NAME: sales_db
       DB_USER: postgres
       DB_PASSWORD: postgres1234
-      PRODUCT_SERVICE_URL: http://ms-product:8082
-      INVENTORY_SERVICE_URL: http://ms-inventory:8083
-      NOTIFICATION_SERVICE_URL: http://ms-notification:8085
-    ports:
-      - "8084:8084"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
+      EUREKA_INSTANCE_HOSTNAME: ms-sales
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8084'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - ferreteria-net
 
   # -----------------------------------------------------------
-  # MS-NOTIFICATION — Alertas y Notificaciones (Puerto 8085)
-  # -----------------------------------------------------------
-  # Recibe alertas de stock bajo y las registra.
-  # En producción enviaría emails reales.
+  # MS-NOTIFICATION — Alertas y Notificaciones (Puerto 8085, interno)
   # -----------------------------------------------------------
   ms-notification:
     build: ./ms-notification
     container_name: ms-notification
+    restart: always
     depends_on:
       postgres:
+        condition: service_healthy
+      eureka:
         condition: service_healthy
     environment:
       DB_HOST: postgres
@@ -150,32 +242,59 @@ services:
       DB_NAME: notification_db
       DB_USER: postgres
       DB_PASSWORD: postgres1234
-    ports:
-      - "8085:8085"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
+      EUREKA_INSTANCE_HOSTNAME: ms-notification
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8085'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - ferreteria-net
 
   # -----------------------------------------------------------
-  # BFF-SERVICE — Backend For Frontend (Puerto 8080)
+  # BFF-SERVICE — Backend For Frontend (Puerto 8090, interno)
   # -----------------------------------------------------------
-  # Único servicio público. Coordina todos los microservicios.
-  # Valida JWT con ms-auth antes de reenviar requests.
+  # Ya no es el punto de entrada público (ese rol lo cumple ahora
+  # apigateway en el 8080). Conserva toda su lógica de orquestación
+  # y seguridad JWT actual. Resuelve los microservicios vía Eureka
+  # + Spring Cloud LoadBalancer en lugar de URLs fijas.
   # -----------------------------------------------------------
   bff-service:
     build: ./bff
     container_name: bff
+    restart: always
     depends_on:
-      - ms-auth
-      - ms-product
-      - ms-inventory
-      - ms-sales
-      - ms-notification
+      eureka:
+        condition: service_healthy
+      ms-auth:
+        condition: service_started
+      ms-product:
+        condition: service_started
+      ms-inventory:
+        condition: service_started
+      ms-sales:
+        condition: service_started
+      ms-notification:
+        condition: service_started
     environment:
-      AUTH_SERVICE_URL: http://ms-auth:8081
-      PRODUCT_SERVICE_URL: http://ms-product:8082
-      INVENTORY_SERVICE_URL: http://ms-inventory:8083
-      SALES_SERVICE_URL: http://ms-sales:8084
-      NOTIFICATION_SERVICE_URL: http://ms-notification:8085
-    ports:
-      - "8080:8080"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
+      EUREKA_INSTANCE_HOSTNAME: bff
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8090'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - ferreteria-net
+
+networks:
+  ferreteria-net:
+    driver: bridge
 
 volumes:
   postgres_data:
