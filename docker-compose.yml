@@ -16,10 +16,12 @@
 #                    PostgreSQL (5432)
 #
 #   eureka (8761) — registro/descubrimiento de todos los servicios
+#   glitchtip (8000) — observabilidad/logging centralizado
 #
 # PUERTOS EXPUESTOS AL HOST (todo lo demás queda solo en red interna):
 #   8080 → apigateway   (público, único punto de entrada externo)
 #   8761 → eureka       (dashboard de registro)
+#   8000 → glitchtip    (UI de observabilidad)
 #   5432 → postgres     (desarrollo)
 #
 # =============================================================
@@ -87,6 +89,8 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
       EUREKA_INSTANCE_HOSTNAME: apigateway
       EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+      GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-docker}
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8080'"]
       interval: 10s
@@ -121,6 +125,8 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
       EUREKA_INSTANCE_HOSTNAME: ms-auth
       EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+      GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-docker}
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8081'"]
       interval: 10s
@@ -151,6 +157,8 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
       EUREKA_INSTANCE_HOSTNAME: ms-product
       EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+      GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-docker}
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8082'"]
       interval: 10s
@@ -181,6 +189,8 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
       EUREKA_INSTANCE_HOSTNAME: ms-inventory
       EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+      GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-docker}
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8083'"]
       interval: 10s
@@ -216,6 +226,8 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
       EUREKA_INSTANCE_HOSTNAME: ms-sales
       EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+      GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-docker}
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8084'"]
       interval: 10s
@@ -246,6 +258,8 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
       EUREKA_INSTANCE_HOSTNAME: ms-notification
       EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+      GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-docker}
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8085'"]
       interval: 10s
@@ -276,6 +290,8 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
       EUREKA_INSTANCE_HOSTNAME: ms-supplier
       EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+      GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-docker}
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8086'"]
       interval: 10s
@@ -308,6 +324,8 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
       EUREKA_INSTANCE_HOSTNAME: ms-purchase
       EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+      GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-docker}
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8087'"]
       interval: 10s
@@ -333,6 +351,8 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
       EUREKA_INSTANCE_HOSTNAME: ms-report
       EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+      GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-docker}
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8088'"]
       interval: 10s
@@ -356,6 +376,8 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
       EUREKA_INSTANCE_HOSTNAME: ms-pricing
       EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+      GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-docker}
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8091'"]
       interval: 10s
@@ -402,6 +424,8 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
       EUREKA_INSTANCE_HOSTNAME: bff
       EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+      GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-docker}
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8090'"]
       interval: 10s
@@ -411,9 +435,55 @@ services:
     networks:
       - ferreteria-net
 
+  # -----------------------------------------------------------
+  # GLITCHTIP — Observabilidad y logging centralizado (Puerto 8000)
+  # -----------------------------------------------------------
+  glitchtip:
+    image: glitchtip/glitchtip:latest
+    container_name: glitchtip
+    restart: always
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgresGt
+      - redisGt
+    environment:
+      DATABASE_URL: postgres://glitchtip:glitchtip1234@postgresGt:5432/glitchtip
+      GLITCHTIP_DOMAIN: http://localhost:8000
+      GLITCHTIP_EMBED_WORKER: "true"
+      REDIS_URL: redis://redisGt:6379/0
+      SECRET_KEY: ferreteria-glitchtip-secret-key-change-me
+      DEFAULT_FROM_EMAIL: noreply@ferreteria.local
+    volumes:
+      - glitchtip_media:/code/media
+    networks:
+      - ferreteria-net
+
+  postgresGt:
+    image: postgres:17-alpine
+    container_name: glitchtip-db
+    restart: always
+    environment:
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD: glitchtip1234
+      POSTGRES_DB: glitchtip
+    volumes:
+      - glitchtip_postgres_data:/var/lib/postgresql/data
+    networks:
+      - ferreteria-net
+
+  redisGt:
+    image: redis:7-alpine
+    container_name: glitchtip-redis
+    restart: always
+    networks:
+      - ferreteria-net
+
 networks:
   ferreteria-net:
     driver: bridge
 
 volumes:
   postgres_data:
+  glitchtip_postgres_data:
+  glitchtip_media:
