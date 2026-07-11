@@ -9,8 +9,9 @@
 #     apigateway            ← único punto de entrada público
 #          ↓ lb://bff (Eureka)
 #     bff-service           ← orquestación + seguridad JWT
-#      ↓  ↓  ↓  ↓  ↓                         (todo vía Eureka)
+#      ↓  ↓  ↓  ↓  ↓  ↓  ↓  ↓  ↓         (todo vía Eureka)
 #   ms-auth ms-product ms-inventory ms-sales ms-notification
+#   ms-supplier ms-purchase ms-report ms-pricing
 #      ↓         ↓            ↓           ↓            ↓
 #                    PostgreSQL (5432)
 #
@@ -255,11 +256,121 @@ services:
       - ferreteria-net
 
   # -----------------------------------------------------------
+  # MS-SUPPLIER — Proveedores (Puerto 8086, interno)
+  # -----------------------------------------------------------
+  ms-supplier:
+    build: ./ms-supplier
+    container_name: ms-supplier
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: supplier_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres1234
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
+      EUREKA_INSTANCE_HOSTNAME: ms-supplier
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8086'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - ferreteria-net
+
+  # -----------------------------------------------------------
+  # MS-PURCHASE — Órdenes de Compra a Proveedores (Puerto 8087, interno)
+  # -----------------------------------------------------------
+  # Al confirmar una orden, incrementa stock en ms-inventory (vía Eureka).
+  # -----------------------------------------------------------
+  ms-purchase:
+    build: ./ms-purchase
+    container_name: ms-purchase
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: purchase_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres1234
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
+      EUREKA_INSTANCE_HOSTNAME: ms-purchase
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8087'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - ferreteria-net
+
+  # -----------------------------------------------------------
+  # MS-REPORT — Reportería de solo lectura, SIN base de datos (Puerto 8088, interno)
+  # -----------------------------------------------------------
+  # Agrega datos de ms-sales, ms-inventory y ms-product vía Eureka.
+  # -----------------------------------------------------------
+  ms-report:
+    build: ./ms-report
+    container_name: ms-report
+    restart: always
+    depends_on:
+      eureka:
+        condition: service_healthy
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
+      EUREKA_INSTANCE_HOSTNAME: ms-report
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8088'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - ferreteria-net
+
+  # -----------------------------------------------------------
+  # MS-PRICING — Cálculo de Precios y Descuentos, SIN base de datos (Puerto 8091, interno)
+  # -----------------------------------------------------------
+  ms-pricing:
+    build: ./ms-pricing
+    container_name: ms-pricing
+    restart: always
+    depends_on:
+      eureka:
+        condition: service_healthy
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
+      EUREKA_INSTANCE_HOSTNAME: ms-pricing
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8091'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - ferreteria-net
+
+  # -----------------------------------------------------------
   # BFF-SERVICE — Backend For Frontend (Puerto 8090, interno)
   # -----------------------------------------------------------
   # Ya no es el punto de entrada público (ese rol lo cumple ahora
   # apigateway en el 8080). Conserva toda su lógica de orquestación
-  # y seguridad JWT actual. Resuelve los microservicios vía Eureka
+  # y seguridad JWT actual. Resuelve los 9 microservicios vía Eureka
   # + Spring Cloud LoadBalancer en lugar de URLs fijas.
   # -----------------------------------------------------------
   bff-service:
@@ -278,6 +389,14 @@ services:
       ms-sales:
         condition: service_started
       ms-notification:
+        condition: service_started
+      ms-supplier:
+        condition: service_started
+      ms-purchase:
+        condition: service_started
+      ms-report:
+        condition: service_started
+      ms-pricing:
         condition: service_started
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka
