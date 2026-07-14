@@ -1,0 +1,11 @@
+# Ensure POSIX shell scripts always keep LF line endings on checkout,
+# regardless of core.autocrlf on the client machine (Windows). A CRLF
+# shebang line (#!/bin/sh\r) is not a valid interpreter path inside
+# Linux Docker images and breaks `./gradlew` with "not found" (exit 127).
+* text=auto
+gradlew text eol=lf
+*.sh text eol=lf
+
+# Windows batch files must keep CRLF.
+gradlew.bat text eol=crlf
+*.bat text eol=crlf
