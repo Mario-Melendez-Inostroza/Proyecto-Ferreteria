@@ -1,0 +1,821 @@
+{
+	"info": {
+		"name": "Ferretería API - Gateway (localhost:8080)",
+		"description": "Colección generada desde el código fuente actual del proyecto Ferretería. Todas las solicitudes entran por el API Gateway (http://localhost:8080), que reenvía al BFF vía Eureka. Flujo recomendado: 1) Auth > Register, 2) Auth > Login, 3) copiar el token de la respuesta y pegarlo después de 'Bearer ' en el header Authorization de los endpoints protegidos. Los UUID de ejemplo corresponden a datos seed reales del proyecto (productos y proveedores); los de ventas/compras/notificaciones deben reemplazarse por IDs obtenidos de las respuestas.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "Health check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/health",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["health"]
+						},
+						"description": "Verifica que el BFF esté arriba (endpoint público, sin JWT)."
+					}
+				}
+			]
+		},
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Register",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"usuario_demo\",\n    \"password\": \"Password123\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/auth/register",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "auth", "register"]
+						},
+						"description": "Registra un nuevo usuario (endpoint público). La contraseña debe tener mínimo 6 caracteres."
+					}
+				},
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"usuario_demo\",\n    \"password\": \"Password123\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/auth/login",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "auth", "login"]
+						},
+						"description": "Autentica al usuario y devuelve el token JWT (endpoint público). Copiar el campo 'token' de la respuesta y pegarlo tras 'Bearer ' en los demás endpoints."
+					}
+				}
+			]
+		},
+		{
+			"name": "Products",
+			"item": [
+				{
+					"name": "Listar productos",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/products",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "products"]
+						},
+						"description": "Lista todos los productos activos del catálogo."
+					}
+				},
+				{
+					"name": "Buscar producto por ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/products/88c8c204-b247-420e-9e40-8309d04e8956",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "products", "88c8c204-b247-420e-9e40-8309d04e8956"]
+						},
+						"description": "Obtiene un producto por su UUID. El ID de ejemplo corresponde al producto seed 'Martillo Stanley'."
+					}
+				},
+				{
+					"name": "Buscar productos por nombre",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/products/buscar?nombre=Martillo",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "products", "buscar"],
+							"query": [
+								{ "key": "nombre", "value": "Martillo" }
+							]
+						},
+						"description": "Busca productos cuyo nombre contenga el texto indicado en el parámetro 'nombre'."
+					}
+				},
+				{
+					"name": "Listar productos por categoría",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/products/categoria/Herramientas",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "products", "categoria", "Herramientas"]
+						},
+						"description": "Lista los productos que pertenecen a la categoría indicada (ej: Herramientas, Pinturas, Medición)."
+					}
+				},
+				{
+					"name": "Crear producto",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"nombre\": \"Taladro Percutor Bosch 650W\",\n    \"descripcion\": \"Taladro percutor eléctrico 650W con mandril de 13mm\",\n    \"precio\": 54990.00,\n    \"categoria\": \"Herramientas Eléctricas\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/products",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "products"]
+						},
+						"description": "Crea un nuevo producto. 'nombre' es obligatorio y 'precio' debe ser mayor a 0."
+					}
+				},
+				{
+					"name": "Actualizar producto",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"nombre\": \"Martillo Stanley Fibra de Vidrio\",\n    \"descripcion\": \"Martillo de acero con mango de fibra de vidrio antivibración\",\n    \"precio\": 17990.00,\n    \"categoria\": \"Herramientas\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/products/88c8c204-b247-420e-9e40-8309d04e8956",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "products", "88c8c204-b247-420e-9e40-8309d04e8956"]
+						},
+						"description": "Actualiza los datos de un producto existente identificado por su UUID."
+					}
+				},
+				{
+					"name": "Desactivar producto",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/products/88c8c204-b247-420e-9e40-8309d04e8956",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "products", "88c8c204-b247-420e-9e40-8309d04e8956"]
+						},
+						"description": "Desactiva (borrado lógico) el producto indicado por su UUID."
+					}
+				}
+			]
+		},
+		{
+			"name": "Inventory",
+			"item": [
+				{
+					"name": "Crear registro de inventario",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"productId\": \"88c8c204-b247-420e-9e40-8309d04e8956\",\n    \"stock\": 50,\n    \"stockMinimo\": 5,\n    \"bodega\": \"Bodega Central\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/inventory",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "inventory"]
+						},
+						"description": "Registra el inventario inicial de un producto (stock inicial, stock mínimo y bodega). El producto debe existir en ms-product."
+					}
+				},
+				{
+					"name": "Listar inventario",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/inventory",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "inventory"]
+						},
+						"description": "Lista todos los registros de inventario."
+					}
+				},
+				{
+					"name": "Listar productos con stock bajo",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/inventory/stock-bajo",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "inventory", "stock-bajo"]
+						},
+						"description": "Lista los registros de inventario cuyo stock actual está por debajo del stock mínimo configurado."
+					}
+				},
+				{
+					"name": "Consultar inventario por producto",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/inventory/producto/88c8c204-b247-420e-9e40-8309d04e8956",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "inventory", "producto", "88c8c204-b247-420e-9e40-8309d04e8956"]
+						},
+						"description": "Obtiene el registro de inventario asociado al UUID del producto indicado."
+					}
+				},
+				{
+					"name": "Agregar stock a un producto",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"cantidad\": 10\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/inventory/producto/88c8c204-b247-420e-9e40-8309d04e8956/agregar",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "inventory", "producto", "88c8c204-b247-420e-9e40-8309d04e8956", "agregar"]
+						},
+						"description": "Incrementa el stock del producto en la cantidad indicada (mínimo 1)."
+					}
+				},
+				{
+					"name": "Descontar stock a un producto",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"cantidad\": 3\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/inventory/producto/88c8c204-b247-420e-9e40-8309d04e8956/descontar",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "inventory", "producto", "88c8c204-b247-420e-9e40-8309d04e8956", "descontar"]
+						},
+						"description": "Descuenta del stock del producto la cantidad indicada (mínimo 1). Falla si no hay stock suficiente."
+					}
+				}
+			]
+		},
+		{
+			"name": "Sales",
+			"item": [
+				{
+					"name": "Registrar venta",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"productId\": \"88c8c204-b247-420e-9e40-8309d04e8956\",\n    \"cantidad\": 2,\n    \"cliente\": \"Juan Pérez\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/sales",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "sales"]
+						},
+						"description": "Registra una venta: valida el producto en ms-product, descuenta stock en ms-inventory y genera alerta en ms-notification si el stock queda bajo el mínimo."
+					}
+				},
+				{
+					"name": "Listar ventas",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/sales",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "sales"]
+						},
+						"description": "Lista todas las ventas registradas."
+					}
+				},
+				{
+					"name": "Buscar venta por ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/sales/6f1e8c2a-4b3d-4e5f-9a7b-1c2d3e4f5a6b",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "sales", "6f1e8c2a-4b3d-4e5f-9a7b-1c2d3e4f5a6b"]
+						},
+						"description": "Obtiene una venta por su UUID. Reemplazar el ID de ejemplo por uno real obtenido al registrar o listar ventas."
+					}
+				},
+				{
+					"name": "Listar ventas por producto",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/sales/producto/88c8c204-b247-420e-9e40-8309d04e8956",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "sales", "producto", "88c8c204-b247-420e-9e40-8309d04e8956"]
+						},
+						"description": "Lista todas las ventas asociadas al UUID del producto indicado."
+					}
+				},
+				{
+					"name": "Resumen de ventas",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/sales/resumen",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "sales", "resumen"]
+						},
+						"description": "Obtiene el resumen agregado de ventas (total de ventas y monto total)."
+					}
+				}
+			]
+		},
+		{
+			"name": "Notifications",
+			"item": [
+				{
+					"name": "Listar notificaciones",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/notifications",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "notifications"]
+						},
+						"description": "Lista todas las notificaciones generadas por el sistema (ventas y alertas de stock bajo)."
+					}
+				},
+				{
+					"name": "Listar notificaciones no leídas",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/notifications/no-leidas",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "notifications", "no-leidas"]
+						},
+						"description": "Lista únicamente las notificaciones que aún no han sido marcadas como leídas."
+					}
+				},
+				{
+					"name": "Marcar notificación como leída",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/notifications/3a9c1d2e-5f6b-4a7c-8d9e-0f1a2b3c4d5e/leer",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "notifications", "3a9c1d2e-5f6b-4a7c-8d9e-0f1a2b3c4d5e", "leer"]
+						},
+						"description": "Marca como leída la notificación indicada por su UUID. Reemplazar el ID de ejemplo por uno real obtenido al listar notificaciones."
+					}
+				},
+				{
+					"name": "Marcar todas las notificaciones como leídas",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/notifications/leer-todas",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "notifications", "leer-todas"]
+						},
+						"description": "Marca todas las notificaciones pendientes como leídas."
+					}
+				}
+			]
+		},
+		{
+			"name": "Suppliers",
+			"item": [
+				{
+					"name": "Listar proveedores",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/suppliers",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "suppliers"]
+						},
+						"description": "Lista todos los proveedores registrados."
+					}
+				},
+				{
+					"name": "Buscar proveedor por ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/suppliers/63c7beb2-0fe1-4d02-b885-bb2f33227a1f",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "suppliers", "63c7beb2-0fe1-4d02-b885-bb2f33227a1f"]
+						},
+						"description": "Obtiene un proveedor por su UUID. El ID de ejemplo corresponde al proveedor seed 'Ferretería El Tornillo Ltda.'."
+					}
+				},
+				{
+					"name": "Buscar proveedores por nombre",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/suppliers/buscar?nombre=Tornillo",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "suppliers", "buscar"],
+							"query": [
+								{ "key": "nombre", "value": "Tornillo" }
+							]
+						},
+						"description": "Busca proveedores cuyo nombre contenga el texto indicado en el parámetro 'nombre'."
+					}
+				},
+				{
+					"name": "Crear proveedor",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Comercial Aceros del Pacífico\",\n    \"rut\": \"79.444.555-6\",\n    \"contactName\": \"Ana Fuentes\",\n    \"phone\": \"+56 9 4444 5555\",\n    \"email\": \"ventas@acerosdelpacifico.cl\",\n    \"address\": \"Av. Portuaria 2300, Valparaíso\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/suppliers",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "suppliers"]
+						},
+						"description": "Crea un nuevo proveedor. 'name' y 'rut' son obligatorios; el RUT no puede repetirse."
+					}
+				},
+				{
+					"name": "Actualizar proveedor",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Ferretería El Tornillo Ltda.\",\n    \"rut\": \"76.111.222-3\",\n    \"contactName\": \"Juan Pérez Soto\",\n    \"phone\": \"+56 9 1111 9999\",\n    \"email\": \"contacto@eltornillo.cl\",\n    \"address\": \"Av. Industrial 450, Oficina 12, Santiago\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/suppliers/63c7beb2-0fe1-4d02-b885-bb2f33227a1f",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "suppliers", "63c7beb2-0fe1-4d02-b885-bb2f33227a1f"]
+						},
+						"description": "Actualiza los datos del proveedor indicado por su UUID."
+					}
+				},
+				{
+					"name": "Desactivar proveedor",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/suppliers/63c7beb2-0fe1-4d02-b885-bb2f33227a1f",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "suppliers", "63c7beb2-0fe1-4d02-b885-bb2f33227a1f"]
+						},
+						"description": "Desactiva (borrado lógico) el proveedor indicado por su UUID."
+					}
+				}
+			]
+		},
+		{
+			"name": "Purchases",
+			"item": [
+				{
+					"name": "Listar órdenes de compra",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/purchases",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "purchases"]
+						},
+						"description": "Lista todas las órdenes de compra, ordenadas de la más reciente a la más antigua."
+					}
+				},
+				{
+					"name": "Buscar orden de compra por ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/purchases/9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "purchases", "9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"]
+						},
+						"description": "Obtiene una orden de compra por su UUID. Reemplazar el ID de ejemplo por uno real obtenido al crear o listar órdenes."
+					}
+				},
+				{
+					"name": "Crear orden de compra",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"supplierId\": \"63c7beb2-0fe1-4d02-b885-bb2f33227a1f\",\n    \"items\": [\n        {\n            \"productId\": \"88c8c204-b247-420e-9e40-8309d04e8956\",\n            \"quantity\": 20,\n            \"unitCost\": 9990.00\n        },\n        {\n            \"productId\": \"eb3f3964-6131-4daa-bdd9-298945eeb385\",\n            \"quantity\": 15,\n            \"unitCost\": 2990.00\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/purchases",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "purchases"]
+						},
+						"description": "Crea una orden de compra en estado PENDING. Valida que el proveedor exista en ms-supplier y cada producto en ms-product. Debe incluir al menos un ítem con cantidad mínima 1 y costo unitario positivo."
+					}
+				},
+				{
+					"name": "Confirmar orden de compra",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/purchases/9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d/confirm",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "purchases", "9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", "confirm"]
+						},
+						"description": "Confirma una orden PENDING: incrementa el stock en ms-inventory por cada ítem y marca la orden como CONFIRMED. Reemplazar el ID de ejemplo por el de una orden real."
+					}
+				},
+				{
+					"name": "Cancelar orden de compra",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/purchases/9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d/cancel",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "purchases", "9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", "cancel"]
+						},
+						"description": "Cancela una orden PENDING (la marca como CANCELLED, sin afectar inventario). Reemplazar el ID de ejemplo por el de una orden real."
+					}
+				}
+			]
+		},
+		{
+			"name": "Reports",
+			"item": [
+				{
+					"name": "Resumen de ventas",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/reports/sales-summary",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "reports", "sales-summary"]
+						},
+						"description": "Reporte agregado con el total de ventas y el monto total, calculado en tiempo real desde ms-sales."
+					}
+				},
+				{
+					"name": "Top productos más vendidos",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/reports/top-products?limit=5",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "reports", "top-products"],
+							"query": [
+								{ "key": "limit", "value": "5" }
+							]
+						},
+						"description": "Ranking de los productos más vendidos por cantidad. El parámetro 'limit' controla cuántos productos devolver (por defecto 5)."
+					}
+				},
+				{
+					"name": "Valorización de inventario",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/reports/inventory-valuation",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "reports", "inventory-valuation"]
+						},
+						"description": "Calcula el valor total del inventario (stock × precio de cada producto), combinando datos de ms-inventory y ms-product."
+					}
+				},
+				{
+					"name": "Alertas de stock bajo",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " }
+						],
+						"url": {
+							"raw": "http://localhost:8080/api/reports/low-stock-alerts",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "reports", "low-stock-alerts"]
+						},
+						"description": "Lista los productos cuyo stock actual está por debajo del mínimo, con nombre del producto incluido."
+					}
+				}
+			]
+		},
+		{
+			"name": "Pricing",
+			"item": [
+				{
+					"name": "Calcular precio con descuento",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Authorization", "value": "Bearer " },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"productId\": \"88c8c204-b247-420e-9e40-8309d04e8956\",\n    \"unitPrice\": 15990.00,\n    \"quantity\": 10,\n    \"category\": \"Herramientas\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/api/pricing/calculate",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "pricing", "calculate"]
+						},
+						"description": "Calcula el descuento aplicable (por volumen o categoría, se aplica el mayor) sobre el precio unitario y la cantidad entregados, devolviendo el precio final unitario y total. 'unitPrice' debe ser positivo y 'quantity' mínimo 1."
+					}
+				}
+			]
+		}
+	]
+}
